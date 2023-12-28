@@ -13,6 +13,9 @@ import cProfile
 import os
 
 class JulianDateFormat:
+    '''
+    This class is used for converting the time into julian date format. Which is being used to find the satellite location
+    '''
     def __init__(self, timeStep, days) -> None:
         self.timeStep = timeStep
         self.days = days
@@ -30,10 +33,13 @@ class JulianDateFormat:
         return value        
     
 class LatLongAlt():
+    '''
+    This class is being used to find the latitude, longitude and altitude of the satellite positions. 
+    '''
     def __init__(self) -> None:
         self.ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
         self.lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
-        self.cache = {}
+        self.cache = {}  # it stores the lat, long, alt values for a particular position. This will help to not to calculate again for the same positions.
 
     def get_value(self, pos_x, pos_y, pos_z):
         if (pos_x, pos_y, pos_z) in self.cache:
@@ -44,6 +50,11 @@ class LatLongAlt():
         return (lat, long, alt)
     
 class Satellite:
+    '''
+    This is the main satellite class. Each satellite has this class object. 
+    This satellite has vectors object which is used to get the details of the satellite, position for all the satellite which are reside within the rectagle given by user. 
+    '''
+
     def __init__(self, source_data, target_data, julian_dates, LatLongAlt, locations) -> None:
         self.source = source_data
         self.target = target_data
@@ -65,6 +76,9 @@ class Satellite:
                 self.vectors.append([time, p[0], p[1], p[2], v[0], v[1], v[2],  lat, long, alt])
 
 class Locations():
+    '''
+    Location class, basically used to check the location of the satellite is exist in the rectangle positions given by user. 
+    '''
     def __init__(self) -> None:
         self.locations = []
         self.correct_location = {}
@@ -82,7 +96,7 @@ class Locations():
             self.locations.append((min_lat, max_lat, min_long, max_long))
     
     def is_lat_long_exist(self, lat, long):
-        if (lat, long) in self.correct_location:
+        if (lat, long) in self.correct_location:   # cache the results for faster look up
             return self.correct_location[(lat, long)]
         for min_lat, max_lat, min_long, max_long in self.locations:
             if (min_lat <= lat <= max_lat) and (min_long <= long <= max_long):
@@ -92,6 +106,9 @@ class Locations():
         return False
 
 def get_input(file_path):
+    execution_mode = input('Execution Mode is Test or Prod? ')
+    if execution_mode == 'Prod':
+        file_path = '27000sats.txt'
     with open(file_path, 'r') as file:
         lines = file.readlines()
     defaultTimeStep = 0.1 if '27000sats.txt' in file_path else 1
