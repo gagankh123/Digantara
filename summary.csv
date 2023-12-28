@@ -1,3 +1,6 @@
-*3000 Satellites,,,,,,,,
-,Execution Time,Peak Memory Usage,Average CPU Usage,Avg Satellite Time,Min Sat Time,Max Sat Time,Min Sat,Max Sat
-Run 1 - Python Code,,,,,,,,
+*3000 Satellites,,,,
+,Execution Time,Peak Memory Usage,Average CPU Usage,Avg Satellite Time
+Run 1 - Python Code,13.515 h,90 MB,12.90%,27 min
+Run 2 - PySpark Code,2.38 h,118 MB,76%,4.6 min
+,,,,
+,,,,
