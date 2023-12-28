@@ -1,0 +1,1 @@
+1. satellite_python.py  - This is being used to run the code in pure python. For 30 satellites, it took 13h to complete.
