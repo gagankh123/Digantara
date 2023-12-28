@@ -17,9 +17,11 @@ import multiprocessing
 import os
 
 spark = SparkSession.builder.appName('satellite').getOrCreate()
-# lprofiler = LineProfiler()
 
 class JulianDateFormat:
+    '''
+    This class is used for converting the time into julian date format. Which is being used to find the satellite location
+    '''
     def __init__(self, timeStep, days) -> None:
         self.timeStep = timeStep
         self.days = days
@@ -37,10 +39,13 @@ class JulianDateFormat:
         return value        
     
 class LatLongAlt():
+    '''
+    This class is being used to find the latitude, longitude and altitude of the satellite positions. 
+    '''
     def __init__(self) -> None:
         self.ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
         self.lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
-        self.cache = {}
+        self.cache = {}  # it stores the lat, long, alt values for a particular position. This will help to not to calculate again for the same positions.
 
     def get_value(self, pos_x, pos_y, pos_z):
         if (pos_x, pos_y, pos_z) in self.cache:
@@ -51,6 +56,10 @@ class LatLongAlt():
         return (lat, long, alt)
     
 class Satellite:
+    '''
+    This is the main satellite class. Each satellite has this class object. 
+    This satellite has vectors object which is used to get the details of the satellite, position for all the satellite which are reside within the rectagle given by user. 
+    '''
     def __init__(self, source_data, target_data, julian_dates, LatLongAlt, locations) -> None:
         self.source = source_data
         self.target = target_data
@@ -76,6 +85,9 @@ class Satellite:
                 print(f'counter: {counter}')
 
 class Locations():
+    '''
+    Location class, basically used to check the location of the satellite is exist in the rectangle positions given by user. 
+    '''
     def __init__(self) -> None:
         self.locations = []
         self.correct_location = {}
@@ -93,7 +105,7 @@ class Locations():
             self.locations.append((min_lat, max_lat, min_long, max_long))
     
     def is_lat_long_exist(self, lat, long):
-        if (lat, long) in self.correct_location:
+        if (lat, long) in self.correct_location: # cache the results for faster look up
             return self.correct_location[(lat, long)]
         for min_lat, max_lat, min_long, max_long in self.locations:
             if (min_lat <= lat <= max_lat) and (min_long <= long <= max_long):
@@ -103,15 +115,26 @@ class Locations():
         return False
 
 def get_input(file_path):
-    lines = spark.read.text(file_path)
+    execution_mode = input('Execution Mode is Test or Prod? ')
+    if execution_mode == 'Test':
+        file_path = '30sats.txt'
     with open(file_path, 'r') as file:
         lines = file.readlines()
-    timeStep = ast.literal_eval(input('Enter TimeStep: '))
-    days = ast.literal_eval(input('Enter Number of days for which need to find Satellite positions: '))
-    regions = ast.literal_eval(input("Enter regions: "))
-    return regions, lines, timeStep, days
+    defaultTimeStep = 0.1 if '27000sats.txt' in file_path else 1
+    defaultDays = 5
 
-@udf(returnType=ArrayType(ArrayType(TimestampType(), IntegerType(), StringType())))
+    timeStep = ast.literal_eval(input('Enter TimeStep: '))
+    if timeStep == '':
+        timeStep = defaultTimeStep
+    days = ast.literal_eval(input('Enter Number of days for which need to find Satellite positions: '))
+    if days == '':
+        days = defaultDays
+    regions = ast.literal_eval(input("Enter regions: "))
+    cores = ast.literal_eval(input('Number of cores available: '))
+    if cores == '':
+        cores = 8
+    return regions, lines, timeStep, days, cores
+
 def sat_processing(satellite_inp, julianDates, lat_long_alt, locations):
     source, target = satellite_inp
     satellite = Satellite(source, target, julianDates, lat_long_alt, locations)
@@ -119,34 +142,25 @@ def sat_processing(satellite_inp, julianDates, lat_long_alt, locations):
     return satellite.vectors
 
 
-# @profile
 def starting_point():
-    regions, lines, timeStep, days = get_input('30sats.txt')
+    regions, lines, timeStep, days, cores = get_input('27000sats.txt')
 
     julianDates = JulianDateFormat(timeStep, days).values
     lat_long_alt = LatLongAlt()
     locations = Locations()
     locations.set_rectangle_locations(regions)
      
-    # lprofiler.add_function(locations.is_lat_long_exist)
-    # lprofiler.add_function(lat_long_alt.get_value)
-    
     start_time = time.time()
     sat_arr = [(lines[i], lines[i+1]) for i in range(0, len(lines), 2)]
     sat_arr = sat_arr[:16]
     rdd = spark.sparkContext.parallelize(sat_arr)
-    rdd = rdd.repartition(8)
+    rdd = rdd.repartition(cores)
 
     results = rdd.map(lambda sat: sat_processing(sat, julianDates, lat_long_alt, locations))
     result = results.collect()
     end_time = time.time()
     print(f'avg_time: {(end_time - start_time)/len(sat_arr)}')
 
-    # lprofiler.print_stats()
-    # print(f'Avg Time Taken by Satellite: {total_time/counter} || MaxTime Per Satellite: {max_time} || MinTime per satellite: {min_time} || max_sat: {max_sat} || min_sat: {min_sat} || valid_locations: {sat_len}')
-
-
-# [[(16.66673, 103.58196), (69.74973, -120.64459), (-21.09096, -119.71009), (-31.32309, -147.79778)]]
 if __name__ == '__main__':
     start_time = time.time()
     starting_point()
